@@ -84,9 +84,27 @@ RIGHT_PATH_BOSS = {
 }
 
 
+# Outer field enemies - penjaga luar lapangan penjara
+OUTER_FIELD_ENEMIES = {
+    'Guard Soldier': {'nyawa': 35, 'damage': 12, 'deskripsi': 'Penjaga bersenjata yang berlari ke medan perang.'},
+    'Crossbowman': {'nyawa': 25, 'damage': 18, 'deskripsi': 'Penembak silang yang menembakkan bolt dari kejauhan.'},
+    'Pikeman': {'nyawa': 30, 'damage': 15, 'deskripsi': 'Penjaga dengan tombak panjang, membentuk barisan.'},
+}
 
-def dramatic_print(text):
-    ui_print(text)
+OUTER_FIELD_BOSS = {
+    'Captain of Guards': {
+        'nyawa': 120,
+        'damage': 28,
+        'deskripsi': 'Kapten penjaga yang memimpin gelombang, terampil dan kejam di medan perang.'
+    }
+}
+
+
+
+def dramatic_print(text, width=60, delay_char=0.006):
+    """Wrapper for `ui_print` that keeps previous simple usage but
+    allows passing `width` and `delay_char` when needed."""
+    ui_print(text, width=width, delay_char=delay_char)
 
 
 def clear_screen():
@@ -411,6 +429,164 @@ def explore_dungeon(name, path, nama_path, nyawa, energi, race, class_name, enem
     return nyawa, energi
 
 
+def field_battle(name, nyawa, energi, race, class_name):
+    """Large outdoor skirmish with waves of guards after the long delay.
+    Returns updated (nyawa, energi)."""
+    dramatic_print("Kamu tiba di lapangan di luar penjara. Pasukan penjaga telah berkumpul!")
+    time.sleep(0.5)
+
+    # Wave settings
+    waves = [3, 4]  # number of enemies in each wave
+    base_enemies = list(OUTER_FIELD_ENEMIES.keys())
+
+    # calculate dodge chance
+    base_dodge = RACES.get(race, {}).get('dodge_chance', 0.3)
+    class_bonus = CLASSES.get(class_name, {}).get('dodge_bonus', 0)
+    player_dodge = max(0.0, min(1.0, base_dodge + class_bonus))
+
+    for w, count in enumerate(waves, start=1):
+        dramatic_print(f"Gelombang {w}: {count} penjaga maju ke arahmu!")
+        time.sleep(0.4)
+        for i in range(count):
+            if nyawa <= 0:
+                return nyawa, energi
+            enemy_name = random.choice(base_enemies)
+            enemy = OUTER_FIELD_ENEMIES[enemy_name]
+            enemy_hp = enemy['nyawa']
+            enemy_dmg = enemy['damage']
+
+            dramatic_print(f"{enemy_name} menyerbu! {enemy['deskripsi']}")
+            time.sleep(0.2)
+
+            # simple skirmish per enemy
+            player_dmg = random.randint(12, 28)
+            while enemy_hp > 0 and nyawa > 0:
+                status = f"Nyawa: {nyawa} | Energi: {energi} | Musuh ({enemy_name}): {enemy_hp}"
+                dramatic_print(status, width=60, delay_char=0.001)
+                action = show_menu("Pilih aksi:", ["Serang", "Dodge (Hemat Energi)"])
+                if "Serang" in action:
+                    dmg = player_dmg + random.randint(-4, 4)
+                    enemy_hp -= dmg
+                    dramatic_print(f"Kamu menyerang! Damage: {dmg}. Musuh tersisa: {max(0, enemy_hp)}")
+                else:
+                    if energi < 15:
+                        dramatic_print("Energi tidak cukup untuk dodge!")
+                    else:
+                        roll = random.random()
+                        energi -= 15
+                        if roll < player_dodge:
+                            dramatic_print("Kamu berhasil menghindar! Serangan musuh meleset.")
+                            break
+                        else:
+                            dramatic_print("Dodge gagal! Kamu masih terkena serangan.")
+
+                if enemy_hp <= 0:
+                    dramatic_print(f"{enemy_name} tewas di medan.")
+                    nyawa += random.randint(3, 10)
+                    energi = min(energi + 8, RACES.get(race, {}).get('energi', 100))
+                    break
+
+                # enemy attacks
+                dmg = enemy_dmg + random.randint(-2, 3)
+                nyawa -= dmg
+                dramatic_print(f"{enemy_name} menyerang! Damage: {dmg}. Nyawa mu: {max(0, nyawa)}")
+                energi = min(energi + 3, RACES.get(race, {}).get('energi', 100))
+
+            time.sleep(0.2)
+
+    # Boss appears after waves
+    dramatic_print("Para penjaga mundur sejenak... Seorang pemimpin muncul di depan barisan mereka!")
+    time.sleep(0.6)
+    boss_name = list(OUTER_FIELD_BOSS.keys())[0]
+    boss = OUTER_FIELD_BOSS[boss_name]
+    boss_hp = boss['nyawa']
+    boss_dmg = boss['damage']
+
+    dramatic_print(f"{boss_name} menghadangmu! {boss['deskripsi']}")
+    time.sleep(0.6)
+
+    player_dmg = random.randint(18, 35)
+    while boss_hp > 0 and nyawa > 0:
+        status = f"Nyawa: {nyawa} | Energi: {energi} | Boss ({boss_name}): {boss_hp}"
+        dramatic_print(status, width=60, delay_char=0.001)
+        action = show_menu("Pilih aksi melawan Boss:", ["Serang", "Dodge (Hemat Energi)"])
+        if "Serang" in action:
+            dmg = player_dmg + random.randint(-8, 8)
+            boss_hp -= dmg
+            dramatic_print(f"Kamu menyerang BOSS! Damage: {dmg}. Boss tersisa: {max(0, boss_hp)}")
+        else:
+            if energi < 20:
+                dramatic_print("Energi tidak cukup untuk dodge!")
+            else:
+                roll = random.random()
+                energi -= 20
+                if roll < (player_dodge * 0.6):
+                    dramatic_print("Kamu berhasil menghindari serangan Boss!")
+                    continue
+                else:
+                    dramatic_print("Dodge Boss gagal!")
+
+        if boss_hp <= 0:
+            dramatic_print(f"{boss_name} tumbang di tanah! Para penjaga lari ketakutan.")
+            nyawa = max(1, nyawa)
+            energi = min(RACES.get(race, {}).get('energi', 100), energi + 20)
+            break
+
+        # boss attacks
+        dmg = boss_dmg + random.randint(-5, 5)
+        nyawa -= dmg
+        dramatic_print(f"{boss_name} menghantammu! Damage: {dmg}. Nyawa mu: {max(0, nyawa)}")
+        energi = min(energi + 5, RACES.get(race, {}).get('energi', 100))
+        time.sleep(0.2)
+
+    return nyawa, energi
+
+
+def peaceful_ending(name, race, class_name, nyawa, energi):
+    """Narrative ending where the character withdraws from the world and starts a new life with a new family."""
+    clear_screen()
+    dramatic_print(
+        f"Setelah pertempuran yang panjang dan menegangkan, {name} merasakan lelah yang dalam.\n"
+        "Dunia perang dan kerumunan telah menguras jiwa. Ada kerinduan pada ketenangan yang tak pernah dirasakan sebelumnya."
+    )
+    time.sleep(1)
+
+    dramatic_print(
+        "Dengan uang hasil rampasan dan sedikit benda berharga yang diselamatkan, kamu membangun sebuah rumah kecil di tepi hutan.\n"
+        "Kamu memilih mengasingkan diri — menjauh dari keramaian, dari perang, dari dendam.\n"
+    )
+    time.sleep(1)
+
+    dramatic_print(
+        "Seiring waktu, orang-orang desa datang dan perlahan hati mereka terbuka. "
+        "Kamu bertemu seseorang yang lembut dan bijaksana — dan bersama, kalian memulai keluarga baru.\n"
+        "Anak-anak tumbuh di bawah langit yang damai, mendengarkan kisah-kisah tentang keberanian dan penyesalan."
+    )
+    time.sleep(1)
+
+    dramatic_print(
+        "Kehidupan baru ini sederhana: bertani, memperbaiki rumah, merawat satu sama lain. "
+        "Kamu menemukan bahwa kebahagiaan bukanlah piala kemenangan, tetapi pagi yang tenang bersama keluarga yang mencintaimu.\n"
+    )
+    time.sleep(1)
+
+    dramatic_print(
+        f"Akhirnya, {name}, kamu menutup bab lamamu — namun kenangan itu tetap menjadi pelajaran. "
+        "Kamu hidup tenang, jauh dari keramaian, bersama keluargamu yang baru. Cerita ini berakhir di sebuah fajar yang damai."
+    )
+    time.sleep(1)
+
+    # Remove any save to reflect retiring
+    try:
+        if os.path.exists("savegame.json"):
+            os.remove("savegame.json")
+    except Exception:
+        pass
+
+    dramatic_print("Terima kasih telah menemani perjalanan ini. Akhir yang damai terpatri untukmu.")
+    return
+
+
 def opening_sequence(name, race, class_name):
     """Display the opening sequence with waking up inside the experimental tube already transformed."""
     clear_screen()
@@ -508,7 +684,7 @@ def opening_sequence(name, race, class_name):
         f"menggema di belakang. Mereka mengejar!\n"
         f"Tapi ada sesuatu di depanmu. Sebuah gerbang RAKSASA terbuat dari besi dan batu, "
         f"tertanam di bukit batu yang menjulang tinggi.\n"
-        f"Gerbang penjara utama... yang menjadi jalan keluar atau jalan menuju gulma lebih dalam."
+        f"Gerbang penjara utama... yang menjadi jalan keluar atau jalan menuju hutan yang lebih dalam."
     )
     dramatic_print(scene8)
     time.sleep(1)
@@ -630,7 +806,19 @@ def game_utama():
     opening_sequence(nama, race, class_name)
     
     print("\n")
-    
+
+    # Because opening took long, penjaga berkumpul di lapangan luar — battle terjadi
+    dramatic_print("Terlambat! Pasukan penjaga telah berkumpul di lapangan luar dan mengepungmu!")
+    nyawa, energi = field_battle(nama, nyawa, energi, race, class_name)
+    if nyawa <= 0:
+        dramatic_print(f"{nama}, kamu tewas di lapangan pertempuran. Permainan berakhir.")
+        try:
+            if os.path.exists(SAVE_FILE):
+                os.remove(SAVE_FILE)
+        except Exception:
+            pass
+        return
+
     # Main game loop - choose paths and explore dungeons
     while True:
         # Prompt player for path choice
@@ -694,7 +882,13 @@ def game_utama():
         print("\n")
         
         # Ask if player wants to continue
-        lanjut = show_menu("Apakah kamu ingin mengeksplorasi jalur yang lain atau melanjutkan pencarian kebebasan?", ["Lanjutkan Petualangan", "Keluar Permainan"])
+        lanjut = show_menu(
+            "Apakah kamu ingin mengeksplorasi jalur yang lain atau melanjutkan pencarian kebebasan?",
+            ["Lanjutkan Petualangan", "Pensiun dan Mulai Hidup Baru", "Keluar Permainan"]
+        )
+        if lanjut and "Pensiun" in lanjut:
+            peaceful_ending(nama, race, class_name, nyawa, energi)
+            break
         if lanjut and "Keluar" in lanjut:
             dramatic_print(f"Terima kasih telah bermain, {nama}. Sampai jumpa!")
             break
